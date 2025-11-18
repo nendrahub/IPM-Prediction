@@ -138,29 +138,37 @@ if model is None or df_hist is None:
 
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard Historis", "🔮 Forecasting Wilayah", "📤 Analisis Massal"])
 
-# -------------------------------------------------------
-# TAB 1: DASHBOARD HISTORIS
-# -------------------------------------------------------
+# ======================================
+# TAB 1 – VISUALISASI IPM LEBIH BERMAKNA
+# ======================================
 with tab1:
-    if df_hist is not None:
-        latest_year = df_hist["Tahun"].max()
-        df_latest = df_hist[df_hist["Tahun"] == latest_year]
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Rata-rata IPM", f"{df_latest['IPM'].mean():.2f}")
-        m2.metric("IPM Tertinggi", f"{df_latest['IPM'].max():.2f}")
-        m3.metric("IPM Terendah", f"{df_latest['IPM'].min():.2f}")
-        m4.metric("Total Wilayah", f"{df_latest['Cakupan'].nunique()}")
-        
-        st.markdown("---")
-        
-        c1, c2 = st.columns([2, 1])
-        
-        with c1:
-            st.markdown("##### 📈 Tren Rata-rata IPM Nasional")
-            df_trend = df_hist.groupby("Tahun")["IPM"].mean().reset_index()
-            chart_trend = create_labeled_line_chart(df_trend, "Tahun", "IPM")
-            st.altair_chart(chart_trend, use_container_width=True)
+    st.subheader("📊 Ringkasan IPM Nasional & Per Daerah")
+
+    if df_hist is None:
+        st.warning("File data_ipm.csv tidak ditemukan. Visualisasi historis tidak dapat ditampilkan.")
+    else:
+        # --------- BAGIAN 1: Tren nasional ---------
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### Tren Rata-rata IPM Nasional")
+            df_nat = (
+                df_hist.groupby("Tahun")["IPM"]
+                .agg(["mean", "min", "max"])
+                .reset_index()
+                .rename(columns={"mean": "IPM_Rata2", "min": "IPM_Min", "max": "IPM_Maks"})
+            )
+
+            st.line_chart(
+                df_nat.set_index("Tahun")[["IPM_Rata2"]],
+                height=300
+            )
+            st.caption(
+                "Garis di atas menunjukkan perkembangan **IPM rata-rata Indonesia** per tahun."
+            )
+
+            st.write("📌 Ringkasan statistik per tahun:")
+            st.dataframe(df_nat, use_container_width=True)
             
         with c2:
             st.markdown(f"##### 🏆 Top 5 Wilayah ({latest_year})")
@@ -318,3 +326,4 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error saat membaca file: {e}")
+
