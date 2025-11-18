@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-import altair as alt  # <--- Wajib import ini untuk kustomisasi chart
+import altair as alt 
 
 # ============================
 # KONFIGURASI HALAMAN
@@ -26,6 +26,12 @@ st.markdown("""
         padding: 15px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    /* Styling tombol download agar lebih menarik */
+    .stDownloadButton button {
+        background-color: #2c3e50;
+        color: white;
+        border-radius: 8px;
     }
     h1, h2, h3 { color: #2c3e50; }
     </style>
@@ -104,32 +110,20 @@ st.markdown("---")
 def create_labeled_line_chart(data, x_col, y_col, color_col=None, title=None):
     # Base Chart
     base = alt.Chart(data).encode(
-        x=alt.X(f'{x_col}:O', axis=alt.Axis(labelAngle=0)), # O = Ordinal (agar tahun tidak ada koma)
-        y=alt.Y(f'{y_col}:Q', scale=alt.Scale(zero=False)), # Q = Quantitative
+        x=alt.X(f'{x_col}:O', axis=alt.Axis(labelAngle=0)), 
+        y=alt.Y(f'{y_col}:Q', scale=alt.Scale(zero=False)), 
         tooltip=[x_col, alt.Tooltip(y_col, format=".2f")]
     )
 
-    # Jika ada kolom warna (untuk pembeda Aktual vs Forecast)
     if color_col:
         base = base.encode(color=color_col)
-        line_color = alt.Color(color_col)
     else:
-        base = base.encode(color=alt.value("#2980b9")) # Warna default biru
+        base = base.encode(color=alt.value("#2980b9")) 
 
-    # Layer 1: Garis
     line = base.mark_line(strokeWidth=3)
-    
-    # Layer 2: Titik Data
     points = base.mark_point(filled=True, size=50)
-
-    # Layer 3: Label Teks (Di atas titik)
-    text = base.mark_text(
-        align='center',
-        baseline='bottom',
-        dy=-10,  # Geser ke atas sedikit
-        fontSize=12
-    ).encode(
-        text=alt.Text(y_col, format=".2f") # Format 2 desimal
+    text = base.mark_text(align='center', baseline='bottom', dy=-10, fontSize=12).encode(
+        text=alt.Text(y_col, format=".2f")
     )
 
     return (line + points + text).properties(height=350).interactive()
@@ -152,7 +146,6 @@ with tab1:
         latest_year = df_hist["Tahun"].max()
         df_latest = df_hist[df_hist["Tahun"] == latest_year]
         
-        # Metrics Row
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Rata-rata IPM", f"{df_latest['IPM'].mean():.2f}")
         m2.metric("IPM Tertinggi", f"{df_latest['IPM'].max():.2f}")
@@ -166,11 +159,8 @@ with tab1:
         with c1:
             st.markdown("##### 📈 Tren Rata-rata IPM Nasional")
             df_trend = df_hist.groupby("Tahun")["IPM"].mean().reset_index()
-            
-            # --- GANTI LINE CHART BIASA DENGAN ALTAIR LABELED ---
             chart_trend = create_labeled_line_chart(df_trend, "Tahun", "IPM")
             st.altair_chart(chart_trend, use_container_width=True)
-            # ----------------------------------------------------
             
         with c2:
             st.markdown(f"##### 🏆 Top 5 Wilayah ({latest_year})")
@@ -178,7 +168,6 @@ with tab1:
             st.markdown(f"##### ⚠️ Bottom 5 Wilayah ({latest_year})")
             st.dataframe(df_latest.nsmallest(5, "IPM")[["Cakupan", "IPM"]].set_index("Cakupan"), use_container_width=True)
 
-        # Komparasi (Tetap pakai line chart biasa karena kalau banyak garis, label jadi berantakan)
         st.markdown("---")
         st.subheader("🔍 Komparasi Daerah")
         daerah_list = sorted(df_hist["Cakupan"].unique())
@@ -223,26 +212,35 @@ with tab2:
                         row["Tahun"] = int(last_row["Tahun"]) + i
                         input_df = pd.DataFrame([row])[feature_names] if feature_names else pd.DataFrame([row])
                         row["IPM"] = model.predict(input_df)[0]
-                        row["Tipe"] = "Forecast" # Label untuk warna
+                        row["Tipe"] = "Forecast" 
                         future_data.append(row)
                     
                     df_future = pd.DataFrame(future_data)
                     
-                    # Siapkan data gabungan untuk chart
+                    # Gabungan untuk chart
                     df_hist_chart = df_d[["Tahun", "IPM"]].copy()
                     df_hist_chart["Tipe"] = "Aktual"
-                    
                     df_final = pd.concat([df_hist_chart, df_future[["Tahun", "IPM", "Tipe"]]], ignore_index=True)
                     
                     st.markdown(f"##### Hasil Forecast: {daerah_fc}")
                     
-                    # --- GANTI CHART FORECAST DENGAN ALTAIR LABELED ---
-                    # Kita gunakan kolom 'Tipe' untuk membedakan warna garis
+                    # Chart Altair
                     fc_chart = create_labeled_line_chart(df_final, "Tahun", "IPM", color_col="Tipe")
                     st.altair_chart(fc_chart, use_container_width=True)
-                    # --------------------------------------------------
                     
-                    st.dataframe(df_future[["Tahun", "IPM", "UHH", "HLS"]].style.format("{:.2f}"), use_container_width=True)
+                    st.dataframe(df_future[["Tahun", "IPM", "UHH", "HLS", "RLS", "Pengeluaran"]].style.format("{:.2f}"), use_container_width=True)
+                    
+                    # ==========================================
+                    # 👇 TOMBOL DOWNLOAD BARU (HASIL FORECAST)
+                    # ==========================================
+                    csv_forecast = df_future.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="💾 Download Data Forecast (CSV)",
+                        data=csv_forecast,
+                        file_name=f"forecast_{daerah_fc}_{horizon}tahun.csv",
+                        mime="text/csv",
+                        key="download_forecast"
+                    )
 
 # -------------------------------------------------------
 # TAB 3: BULK UPLOAD
@@ -256,8 +254,20 @@ with tab3:
             missing = [c for c in feature_names if c not in df_in.columns]
             if not missing:
                 df_in["IPM_Prediksi"] = model.predict(df_in[feature_names])
-                st.success("Selesai")
+                st.success("✅ Prediksi Selesai")
                 st.dataframe(df_in.head(), use_container_width=True)
+                
+                # ==========================================
+                # 👇 TOMBOL DOWNLOAD (HASIL PREDIKSI MASSAL)
+                # ==========================================
+                csv_res = df_in.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="💾 Download Hasil Prediksi (CSV)",
+                    data=csv_res,
+                    file_name="hasil_prediksi_ipm_massal.csv",
+                    mime="text/csv",
+                    key="download_bulk"
+                )
             else:
                 st.error(f"Kolom hilang: {missing}")
         except Exception as e: st.error(f"Error: {e}")
