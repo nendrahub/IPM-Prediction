@@ -178,96 +178,143 @@ with tab1:
             df_pivot = df_comp.pivot(index="Tahun", columns="Cakupan", values="IPM")
             st.line_chart(df_pivot, height=350)
 
-# -------------------------------------------------------
-# TAB 2: FORECASTING
-# -------------------------------------------------------
+# ======================================
+# TAB 2 – FORECAST BERDASARKAN GROWTH
+# ======================================
 with tab2:
-    st.subheader("🔮 Proyeksi IPM Masa Depan")
-    
-    if df_hist is not None and model is not None:
-        col_f1, col_f2 = st.columns([1, 3])
-        
-        with col_f1:
-            daerah_fc = st.selectbox("Pilih Wilayah:", sorted(df_hist["Cakupan"].unique()))
-            horizon = st.slider("Jangka Waktu:", 1, 10, 5)
-            btn_fc = st.button("Generate Forecast")
-            
-        with col_f2:
-            if btn_fc:
-                df_d = df_hist[df_hist["Cakupan"] == daerah_fc].sort_values("Tahun")
-                
-                if len(df_d) < 2:
-                    st.error("Data historis kurang.")
-                else:
-                    features = ["UHH", "HLS", "RLS", "Pengeluaran"]
-                    growth = df_d[features].diff().mean()
-                    last_row = df_d.iloc[-1]
-                    
-                    future_data = []
-                    curr = last_row[features].to_dict()
-                    
-                    for i in range(1, horizon + 1):
-                        for f in features: curr[f] += growth[f]
-                        row = curr.copy()
-                        row["Tahun"] = int(last_row["Tahun"]) + i
-                        input_df = pd.DataFrame([row])[feature_names] if feature_names else pd.DataFrame([row])
-                        row["IPM"] = model.predict(input_df)[0]
-                        row["Tipe"] = "Forecast" 
-                        future_data.append(row)
-                    
-                    df_future = pd.DataFrame(future_data)
-                    
-                    # Gabungan untuk chart
-                    df_hist_chart = df_d[["Tahun", "IPM"]].copy()
-                    df_hist_chart["Tipe"] = "Aktual"
-                    df_final = pd.concat([df_hist_chart, df_future[["Tahun", "IPM", "Tipe"]]], ignore_index=True)
-                    
-                    st.markdown(f"##### Hasil Forecast: {daerah_fc}")
-                    
-                    # Chart Altair
-                    fc_chart = create_labeled_line_chart(df_final, "Tahun", "IPM", color_col="Tipe")
-                    st.altair_chart(fc_chart, use_container_width=True)
-                    
-                    st.dataframe(df_future[["Tahun", "IPM", "UHH", "HLS", "RLS", "Pengeluaran"]].style.format("{:.2f}"), use_container_width=True)
-                    
-                    # ==========================================
-                    # 👇 TOMBOL DOWNLOAD BARU (HASIL FORECAST)
-                    # ==========================================
-                    csv_forecast = df_future.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="💾 Download Data Forecast (CSV)",
-                        data=csv_forecast,
-                        file_name=f"forecast_{daerah_fc}_{horizon}tahun.csv",
-                        mime="text/csv",
-                        key="download_forecast"
-                    )
+    st.subheader("🔮 Forecast IPM dengan Growth Rata-rata per Daerah")
 
-# -------------------------------------------------------
-# TAB 3: BULK UPLOAD
-# -------------------------------------------------------
-with tab3:
-    st.subheader("📤 Prediksi Massal via CSV")
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
-    if uploaded_file and model:
-        try:
-            df_in = pd.read_csv(uploaded_file)
-            missing = [c for c in feature_names if c not in df_in.columns]
-            if not missing:
-                df_in["IPM_Prediksi"] = model.predict(df_in[feature_names])
-                st.success("✅ Prediksi Selesai")
-                st.dataframe(df_in.head(), use_container_width=True)
-                
-                # ==========================================
-                # 👇 TOMBOL DOWNLOAD (HASIL PREDIKSI MASSAL)
-                # ==========================================
-                csv_res = df_in.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="💾 Download Hasil Prediksi (CSV)",
-                    data=csv_res,
-                    file_name="hasil_prediksi_ipm_massal.csv",
-                    mime="text/csv",
-                    key="download_bulk"
+    if df_hist is None:
+        st.warning("File data_ipm.csv tidak ditemukan. Forecast tidak dapat dihitung.")
+    else:
+        daerah_list = sorted(df_hist["Cakupan"].unique().tolist())
+        daerah2 = st.selectbox(
+            "Pilih Provinsi/Daerah untuk Forecast",
+            daerah_list,
+            key="forecast_daerah"
+        )
+
+        df_d = df_hist[df_hist["Cakupan"] == daerah2].sort_values("Tahun").copy()
+
+        if df_d["Tahun"].nunique() < 2:
+            st.warning("Data tahun untuk daerah ini terlalu sedikit untuk menghitung growth rata-rata.")
+        else:
+            # Hitung growth sederhana
+            df_d["UHH_diff"] = df_d["UHH"].diff()
+            df_d["HLS_diff"] = df_d["HLS"].diff()
+            df_d["RLS_diff"] = df_d["RLS"].diff()
+            df_d["Pengeluaran_diff"] = df_d["Pengeluaran"].diff()
+
+            growth = df_d[["UHH_diff", "HLS_diff", "RLS_diff", "Pengeluaran_diff"]].mean()
+
+            last_row = df_d.tail(1).copy()
+            last_year = int(last_row["Tahun"].iloc[0])
+
+            horizon = st.slider("Horizon tahun forecast", 1, 10, 5)
+
+            future_rows = []
+            current = last_row.copy()
+
+            for i in range(1, horizon + 1):
+                new = current.copy()
+                new["Tahun"] = last_year + i
+                new["UHH"] = new["UHH"] + growth["UHH_diff"]
+                new["HLS"] = new["HLS"] + growth["HLS_diff"]
+                new["RLS"] = new["RLS"] + growth["RLS_diff"]
+                new["Pengeluaran"] = new["Pengeluaran"] + growth["Pengeluaran_diff"]
+
+                X_new = new[feature_names]
+                new["IPM_Prediksi"] = model.predict(X_new)[0]
+                future_rows.append(new)
+
+                current = new
+
+            if future_rows:
+                df_future = pd.concat(future_rows, ignore_index=True)
+
+                st.write(f"**Forecast IPM {daerah2} untuk {horizon} tahun ke depan:**")
+                st.dataframe(
+                    df_future[["Tahun", "IPM_Prediksi", "UHH", "HLS", "RLS", "Pengeluaran"]],
+                    use_container_width=True
                 )
+
+                # Gabungkan historis + forecast untuk plot
+                df_plot_hist = df_d[["Tahun", "IPM"]].rename(columns={"IPM": "IPM_Aktual"})
+                df_plot_future = df_future[["Tahun", "IPM_Prediksi"]]
+
+                df_plot = pd.merge(
+                    df_plot_hist,
+                    df_plot_future,
+                    on="Tahun",
+                    how="outer"
+                ).set_index("Tahun").sort_index()
+
+                st.line_chart(df_plot, height=350)
+
+                # 🔽 Tombol download hasil forecast
+                csv_future = df_future[
+                    ["Tahun", "IPM_Prediksi", "UHH", "HLS", "RLS", "Pengeluaran"]
+                ].to_csv(index=False).encode("utf-8")
+
+                st.download_button(
+                    label="💾 Download hasil forecast (CSV)",
+                    data=csv_future,
+                    file_name=f"forecast_ipm_{daerah2.replace(' ', '_')}.csv",
+                    mime="text/csv"
+                )
+
+# ======================================
+# TAB 3 – UPLOAD FILE & PREDIKSI MASSAL
+# ======================================
+with tab3:
+    st.subheader("📤 Upload Data Komponen & Prediksi Massal IPM")
+
+    st.write(
+        "Fitur ini untuk **upload file CSV** berisi komponen IPM (dummy data atau data aktual), "
+        "lalu sistem akan menghitung kolom **IPM_Prediksi** secara otomatis."
+    )
+
+    st.markdown(
+        """
+        **Format kolom yang diharapkan (header CSV):**
+        - `UHH`  
+        - `HLS`  
+        - `RLS`  
+        - `Pengeluaran`  
+        - `Tahun`  
+        - (opsional) `Cakupan` – nama provinsi/daerah
+        """
+    )
+
+    uploaded_file = st.file_uploader(
+        "Upload file CSV komponen IPM",
+        type=["csv"],
+        help="Pastikan kolom minimal berisi: UHH, HLS, RLS, Pengeluaran, Tahun"
+    )
+
+    if uploaded_file is not None:
+        try:
+            df_input = pd.read_csv(uploaded_file)
+
+            missing = [col for col in feature_names if col not in df_input.columns]
+            if missing:
+                st.error(f"Kolom berikut tidak ditemukan di file: {missing}")
             else:
-                st.error(f"Kolom hilang: {missing}")
-        except Exception as e: st.error(f"Error: {e}")
+                df_pred = df_input.copy()
+                df_pred["IPM_Prediksi"] = model.predict(df_pred[feature_names])
+
+                st.success("Prediksi IPM berhasil dihitung.")
+                st.write("**Contoh hasil (5 baris pertama):**")
+                st.dataframe(df_pred.head(), use_container_width=True)
+
+                # 🔽 Tombol download hasil prediksi
+                csv_pred = df_pred.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    label="💾 Download hasil prediksi (CSV)",
+                    data=csv_pred,
+                    file_name="hasil_prediksi_ipm.csv",
+                    mime="text/csv"
+                )
+
+        except Exception as e:
+            st.error(f"Terjadi error saat membaca file: {e}")
