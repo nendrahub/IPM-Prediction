@@ -3,39 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
-import altair as alt 
-
-# ============================
-# KONFIGURASI HALAMAN
-# ============================
-st.set_page_config(
-    page_title="IPM Indonesia Dashboard",
-    page_icon="🇮🇩",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# ============================
-# CUSTOM CSS
-# ============================
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric {
-        background-color: #ffffff;
-        padding: 15px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    }
-    /* Styling tombol download agar lebih menarik */
-    .stDownloadButton button {
-        background-color: #2c3e50;
-        color: white;
-        border-radius: 8px;
-    }
-    h1, h2, h3 { color: #2c3e50; }
-    </style>
-""", unsafe_allow_html=True)
 
 # ============================
 # LOAD MODEL & DATA
@@ -43,17 +10,8 @@ st.markdown("""
 
 @st.cache_resource
 def load_model():
-    model_path = "model_ipm_gradientboosting.joblib"
-    if not os.path.exists(model_path):
-        return None, None
-    try:
-        loaded = joblib.load(model_path)
-        if isinstance(loaded, dict):
-            return loaded.get("model"), loaded.get("features")
-        return loaded, None 
-    except Exception as e:
-        st.error(f"Gagal memuat model: {e}")
-        return None, None
+    loaded = joblib.load("model_ipm_gradientboosting.joblib")
+    return loaded["model"], loaded["features"]
 
 @st.cache_data
 def load_data():
@@ -61,8 +19,26 @@ def load_data():
         return pd.read_csv("data_ipm.csv")
     return None
 
+
 model, feature_names = load_model()
 df_hist = load_data()
+
+st.set_page_config(
+    page_title="IPM Indonesia – Prediksi & Forecasting",
+    layout="wide"
+)
+
+# ============================
+# HEADER
+# ============================
+
+st.title("📈 Prediksi & Forecasting IPM Indonesia")
+
+st.write(
+    "Aplikasi ini menggunakan model **Gradient Boosting** untuk memprediksi "
+    "Indeks Pembangunan Manusia (IPM) berdasarkan komponen penyusunnya: "
+    "**UHH, HLS, RLS, Pengeluaran per Kapita, dan Tahun**."
+)
 
 # ============================
 # SIDEBAR – INPUT MANUAL
@@ -97,46 +73,26 @@ with st.sidebar:
             st.markdown(f"Status: :**{color}[{status}]**")
         except Exception as e: st.error(f"Error: {e}")
 
-# ============================
-# HEADER UTAMA
-# ============================
-
-st.title("📈 Analisis & Forecasting IPM Indonesia")
-st.markdown("---")
-
-# ============================
-# FUNGSI PEMBUAT CHART DENGAN LABEL
-# ============================
-def create_labeled_line_chart(data, x_col, y_col, color_col=None, title=None):
-    # Base Chart
-    base = alt.Chart(data).encode(
-        x=alt.X(f'{x_col}:O', axis=alt.Axis(labelAngle=0)), 
-        y=alt.Y(f'{y_col}:Q', scale=alt.Scale(zero=False)), 
-        tooltip=[x_col, alt.Tooltip(y_col, format=".2f")]
+with st.sidebar.expander("ℹ️ Keterangan Singkatan Komponen"):
+    st.markdown(
+        """
+        **UHH** : Umur Harapan Hidup (tahun)  
+        **HLS** : Harapan Lama Sekolah (tahun)  
+        **RLS** : Rata-rata Lama Sekolah (tahun)  
+        **Pengeluaran** : Pengeluaran per Kapita (Rp/tahun, harga konstan)  
+        **IPM** : Indeks Pembangunan Manusia  
+        """
     )
 
-    if color_col:
-        base = base.encode(color=color_col)
-    else:
-        base = base.encode(color=alt.value("#2980b9")) 
-
-    line = base.mark_line(strokeWidth=3)
-    points = base.mark_point(filled=True, size=50)
-    text = base.mark_text(align='center', baseline='bottom', dy=-10, fontSize=12).encode(
-        text=alt.Text(y_col, format=".2f")
-    )
-
-    return (line + points + text).properties(height=350).interactive()
-
-
 # ============================
-# KONTEN TABS
+# TAB UTAMA
 # ============================
 
-if model is None or df_hist is None:
-    st.warning("⚠️ Model atau Data tidak ditemukan.")
-
-tab1, tab2, tab3 = st.tabs(["📊 Dashboard Historis", "🔮 Forecasting Wilayah", "📤 Analisis Massal"])
+tab1, tab2, tab3 = st.tabs([
+    "📊 Visualisasi IPM & Ringkasan Tahunan",
+    "🔮 Forecast IPM per Daerah",
+    "📤 Upload Data & Prediksi Massal"
+])
 
 # ======================================
 # TAB 1 – VISUALISASI IPM LEBIH BERMAKNA
@@ -169,22 +125,57 @@ with tab1:
 
             st.write("📌 Ringkasan statistik per tahun:")
             st.dataframe(df_nat, use_container_width=True)
-            
-        with c2:
-            st.markdown(f"##### 🏆 Top 5 Wilayah ({latest_year})")
-            st.dataframe(df_latest.nlargest(5, "IPM")[["Cakupan", "IPM"]].set_index("Cakupan"), use_container_width=True)
-            st.markdown(f"##### ⚠️ Bottom 5 Wilayah ({latest_year})")
-            st.dataframe(df_latest.nsmallest(5, "IPM")[["Cakupan", "IPM"]].set_index("Cakupan"), use_container_width=True)
+
+        # --------- BAGIAN 2: Ringkasan per tahun (top/bottom) ---------
+        with col2:
+            st.markdown("### Ringkasan Daerah per Tahun")
+
+            tahun_ringkas = st.selectbox(
+                "Pilih tahun untuk melihat peringkat IPM",
+                sorted(df_hist["Tahun"].unique()),
+            )
+
+            df_year = df_hist[df_hist["Tahun"] == tahun_ringkas].copy()
+            avg_ipm = df_year["IPM"].mean()
+            max_ipm = df_year["IPM"].max()
+            min_ipm = df_year["IPM"].min()
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Rata-rata IPM", f"{avg_ipm:.2f}")
+            c2.metric("IPM Tertinggi", f"{max_ipm:.2f}")
+            c3.metric("IPM Terendah", f"{min_ipm:.2f}")
+
+            df_rank = df_year.sort_values("IPM", ascending=False)
+
+            st.markdown("**Top 5 daerah dengan IPM tertinggi:**")
+            st.dataframe(df_rank.head(5)[["Cakupan", "IPM"]])
+
+            st.markdown("**Bottom 5 daerah dengan IPM terendah:**")
+            st.dataframe(df_rank.tail(5)[["Cakupan", "IPM"]])
 
         st.markdown("---")
-        st.subheader("🔍 Komparasi Daerah")
-        daerah_list = sorted(df_hist["Cakupan"].unique())
-        selected_daerah = st.multiselect("Pilih Daerah:", daerah_list, default=daerah_list[:2] if len(daerah_list)>1 else None)
-        
-        if selected_daerah:
-            df_comp = df_hist[df_hist["Cakupan"].isin(selected_daerah)]
-            df_pivot = df_comp.pivot(index="Tahun", columns="Cakupan", values="IPM")
-            st.line_chart(df_pivot, height=350)
+        # --------- BAGIAN 3: Perbandingan beberapa daerah ---------
+        st.markdown("### Perbandingan Tren IPM Beberapa Daerah")
+
+        daerah_list = sorted(df_hist["Cakupan"].unique().tolist())
+        default_selection = daerah_list[:3] if len(daerah_list) >= 3 else daerah_list
+
+        daerah_multi = st.multiselect(
+            "Pilih 1–5 daerah untuk dibandingkan tren IPM-nya:",
+            daerah_list,
+            default=default_selection,
+        )
+
+        if daerah_multi:
+            df_sel = (
+                df_hist[df_hist["Cakupan"].isin(daerah_multi)]
+                .sort_values(["Cakupan", "Tahun"])
+            )
+
+            pivot_ipm = df_sel.pivot(index="Tahun", columns="Cakupan", values="IPM")
+            st.line_chart(pivot_ipm, height=350)
+        else:
+            st.info("Pilih minimal satu daerah untuk melihat perbandingan tren IPM.")
 
 # ======================================
 # TAB 2 – FORECAST BERDASARKAN GROWTH
@@ -326,4 +317,3 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error saat membaca file: {e}")
-
