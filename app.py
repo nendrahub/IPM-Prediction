@@ -161,7 +161,7 @@ with tab1:
             st.markdown("**Top 5 daerah dengan IPM tertinggi:**")
             st.dataframe(df_rank.head(5)[["Cakupan", "IPM"]])
 
-            st.markdown("**Bottom 5 daerah dengan IPM terendah:**")
+            st.markdown("**Top 5 daerah dengan IPM terendah:**")
             st.dataframe(df_rank.tail(5)[["Cakupan", "IPM"]])
 
         st.markdown("---")
@@ -356,3 +356,4 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error saat membaca file: {e}")
+
