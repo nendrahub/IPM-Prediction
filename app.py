@@ -324,7 +324,14 @@ with tab3:
         """
     )
 
-    df_input = pd.read_csv(uploaded_file, decimal=",", thousands=".")
+if uploaded_file is not None:
+    try:
+        # ⬇️ ini baris yang diubah
+        df_input = pd.read_csv(
+            uploaded_file,
+            decimal=",",      # koma sebagai tanda desimal
+            thousands="."     # titik sebagai pemisah ribuan
+        )
 
 # cek kolom, dll...
 
@@ -365,6 +372,7 @@ for daerah, df_d in df_input.groupby("Cakupan"):
 if all_future:
     df_future = pd.concat(all_future, ignore_index=True)
     st.dataframe(df_future)
+
 
 
 
