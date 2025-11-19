@@ -324,42 +324,48 @@ with tab3:
         """
     )
 
-    uploaded_file = st.file_uploader(
-        "Upload file CSV komponen IPM",
-        type=["csv"],
-        help="Pastikan kolom minimal berisi: UHH, HLS, RLS, Pengeluaran, Tahun"
-    )
+    df_input = pd.read_csv(uploaded_file, decimal=",", thousands=".")
 
-    if uploaded_file is not None:
-        try:
-            df_input = pd.read_csv(
-                uploaded_file,
-                decimal=",",      # koma sebagai tanda desimal
-                thousands="."     # titik sebagai pemisah ribuan
-            )
-            
-            missing = [col for col in feature_names if col not in df_input.columns]
-            if missing:
-                st.error(f"Kolom berikut tidak ditemukan di file: {missing}")
-            else:
-                df_pred = df_input.copy()
-                df_pred["IPM_Prediksi"] = model.predict(df_pred[feature_names])
+# cek kolom, dll...
 
-                st.success("Prediksi IPM berhasil dihitung.")
-                st.write("**Contoh hasil (5 baris pertama):**")
-                st.dataframe(df_pred.head(), use_container_width=True)
+horizon = st.slider("Forecast berapa tahun ke depan?", 1, 10, 5)
 
-                # 🔽 Tombol download hasil prediksi
-                csv_pred = df_pred.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="💾 Download hasil prediksi (CSV)",
-                    data=csv_pred,
-                    file_name="hasil_prediksi_ipm.csv",
-                    mime="text/csv"
-                )
+all_future = []
 
-        except Exception as e:
-            st.error(f"Terjadi error saat membaca file: {e}")
+for daerah, df_d in df_input.groupby("Cakupan"):
+    df_d = df_d.sort_values("Tahun").copy()
+
+    if df_d["Tahun"].nunique() < 2:
+        # kalau cuma 1 tahun, susah hitung growth → boleh skip atau asumsikan growth=0
+        continue
+
+    # hitung growth sama persis dengan Tab 2
+    df_d["UHH_diff"] = df_d["UHH"].diff()
+    df_d["HLS_diff"] = df_d["HLS"].diff()
+    df_d["RLS_diff"] = df_d["RLS"].diff()
+    df_d["Pengeluaran_diff"] = df_d["Pengeluaran"].diff()
+    growth = df_d[["UHH_diff", "HLS_diff", "RLS_diff", "Pengeluaran_diff"]].mean()
+
+    last_row = df_d.tail(1).copy()
+    last_year = int(last_row["Tahun"].iloc[0])
+
+    current = last_row.copy()
+    for i in range(1, horizon + 1):
+        new = current.copy()
+        new["Tahun"] = last_year + i
+        new["UHH"] = new["UHH"] + growth["UHH_diff"]
+        new["HLS"] = new["HLS"] + growth["HLS_diff"]
+        new["RLS"] = new["RLS"] + growth["RLS_diff"]
+        new["Pengeluaran"] = new["Pengeluaran"] + growth["Pengeluaran_diff"]
+
+        new["IPM_Prediksi"] = model.predict(new[feature_names])[0]
+        all_future.append(new)
+        current = new
+
+if all_future:
+    df_future = pd.concat(all_future, ignore_index=True)
+    st.dataframe(df_future)
+
 
 
 
