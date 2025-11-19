@@ -332,8 +332,12 @@ with tab3:
 
     if uploaded_file is not None:
         try:
-            df_input = pd.read_csv(uploaded_file)
-
+            df_input = pd.read_csv(
+                uploaded_file,
+                decimal=",",      # koma sebagai tanda desimal
+                thousands="."     # titik sebagai pemisah ribuan
+            )
+            
             missing = [col for col in feature_names if col not in df_input.columns]
             if missing:
                 st.error(f"Kolom berikut tidak ditemukan di file: {missing}")
@@ -356,5 +360,6 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error saat membaca file: {e}")
+
 
 
