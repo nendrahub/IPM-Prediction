@@ -273,12 +273,12 @@ with tab2:
                 
                 # Siapkan Data Aktual (IPM)
                 df_plot_hist = df_d[["Tahun", "IPM"]].copy()
-                df_plot_hist["Jenis_Data"] = "Aktual"
+                df_plot_hist["Tipe"] = "Aktual"
                 df_plot_hist = df_plot_hist.rename(columns={"IPM": "Nilai IPM"})
 
                 # Siapkan Data Forecast (IPM Forecast)
                 df_plot_future = df_future[["Tahun", "IPM (Forecast)"]].copy()
-                df_plot_future["Jenis_Data"] = "Forecast (Drift)"
+                df_plot_future["Tipe"] = "Forecast (Drift)"
                 df_plot_future = df_plot_future.rename(columns={"IPM (Forecast)": "Nilai IPM"})
 
                 # Gabung jadi satu DataFrame panjang (Long Format)
@@ -295,8 +295,8 @@ with tab2:
                 ).encode(
                     x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')), # Format 'd' agar 2022 (bukan 2,022)
                     y=alt.Y('Nilai IPM', scale=alt.Scale(zero=False), title='Nilai IPM'),
-                    color=alt.Color('Jenis_Data', scale=color_scale, legend=alt.Legend(title="Keterangan")),
-                    tooltip=['Tahun', 'Jenis_Data', alt.Tooltip('Nilai IPM', format='.2f')]
+                    color=alt.Color('Tipe', scale=color_scale, legend=alt.Legend(title="Keterangan")),
+                    tooltip=['Tahun', 'Tipe', alt.Tooltip('Nilai IPM', format='.2f')]
                 ).interactive()
 
                 st.altair_chart(chart, use_container_width=True)
@@ -483,6 +483,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
