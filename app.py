@@ -348,8 +348,8 @@ with tab3:
                 'rls': 'RLS', 'Rls': 'RLS',
                 'pengeluaran': 'Pengeluaran', 'PENGELUARAN': 'Pengeluaran',
                 'cakupan': 'Cakupan', 'CAKUPAN': 'Cakupan',
-                'IPM': 'Indeks Pembangunan Manusia (Indeks)',
-                'Indeks Pembangunan Manusia': 'Indeks Pembangunan Manusia (Indeks)'
+                'IPM': 'IPM',
+                'Indeks Pembangunan Manusia': 'IPM'
             }
             df_input = df_input.rename(columns=rename_map)
 
@@ -362,7 +362,7 @@ with tab3:
                 if 'Cakupan' not in df_proc.columns:
                     df_proc['Cakupan'] = 'Wilayah Upload'
                 
-                target_col_name = 'Indeks Pembangunan Manusia (Indeks)'
+                target_col_name = 'IPM'
                 if target_col_name not in df_proc.columns:
                     df_proc[target_col_name] = np.nan
 
@@ -471,4 +471,5 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
