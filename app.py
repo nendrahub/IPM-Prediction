@@ -366,105 +366,113 @@ with tab3:
                 thousands="."     
             )
             
+            # --- PERBAIKAN 1: Normalisasi Nama Kolom ---
+            # Menghilangkan spasi di awal/akhir nama kolom & mengubah jadi Title Case
+            # Contoh: "tahun " -> "Tahun", "hls" -> "Hls" (Kita handle manual mapping biar aman)
+            df_input.columns = df_input.columns.str.strip()
+            
+            # Mapping manual jika user menulis huruf kecil/besar berbeda
+            col_mapping = {
+                'tahun': 'Tahun', 'TAHUN': 'Tahun',
+                'uhh': 'UHH', 'Uhh': 'UHH',
+                'hls': 'HLS', 'Hls': 'HLS',
+                'rls': 'RLS', 'Rls': 'RLS',
+                'pengeluaran': 'Pengeluaran', 'PENGELUARAN': 'Pengeluaran',
+                'cakupan': 'Cakupan', 'CAKUPAN': 'Cakupan'
+            }
+            df_input = df_input.rename(columns=col_mapping)
+            
             # Cek kolom wajib
             required_cols = feature_names + ['Tahun']
             missing = [col for col in required_cols if col not in df_input.columns]
             
             if missing:
-                st.error(f"Kolom berikut tidak ditemukan di file: {missing}")
+                st.error(f"Kolom berikut tidak ditemukan (Cek penulisan huruf besar/kecil): {missing}")
+                st.write("Nama kolom yang terdeteksi di file:", list(df_input.columns))
             else:
                 # 2. Persiapan Data
                 df_proc = df_input.copy()
                 
-                # Jika kolom Cakupan tidak ada, buat dummy agar loop tetap berjalan
+                # Handle Cakupan
                 has_cakupan = 'Cakupan' in df_proc.columns
                 if not has_cakupan:
                     df_proc['Cakupan'] = 'Wilayah Upload'
 
-                # Pastikan urut berdasarkan Cakupan dan Tahun
                 df_proc = df_proc.sort_values(by=['Cakupan', 'Tahun'])
-
-                # List untuk menampung data historis + forecast
                 all_data = []
-
-                # 3. Loop per Wilayah (Cakupan) untuk Forecasting
-                regions = df_proc['Cakupan'].unique()
-                
                 target_forecast_year = 2030
                 
+                # Ambil list fitur yang HANYA numerik untuk di-forecast (Kecuali Tahun)
+                # Ini mencegah error jika 'Tahun' tidak sengaja masuk ke variable feature_names
+                forecast_cols = [col for col in feature_names if col != 'Tahun']
+
+                # 3. Loop per Wilayah
+                regions = df_proc['Cakupan'].unique()
                 forecast_bar = st.progress(0, text="Sedang menghitung forecast...")
 
                 for i, region in enumerate(regions):
-                    # Ambil data per wilayah
+                    # Filter data wilayah
                     df_region = df_proc[df_proc['Cakupan'] == region].copy()
                     
-                    # Set Tahun sebagai index untuk mempermudah fungsi drift
-                    df_region_indexed = df_region.set_index('Tahun')
-                    
+                    # --- PERBAIKAN 2: Aman dari Error Index ---
+                    # Kita gunakan df_region untuk ambil last_year, 
+                    # dan df_region_indexed HANYA untuk perhitungan drift
                     last_year = df_region['Tahun'].max()
                     
-                    # Tambahkan data historis ke list
-                    # Kita tandai ini data aktual
+                    df_region_indexed = df_region.set_index('Tahun')
+                    
+                    # Simpan data aktual
                     df_region['Jenis_Data'] = 'Aktual'
                     all_data.append(df_region)
                     
-                    # Lakukan forecasting jika last_year < 2030
+                    # Forecasting Loop
                     if last_year < target_forecast_year:
                         future_years = range(last_year + 1, target_forecast_year + 1)
                         
                         for year in future_years:
                             new_row = {'Cakupan': region, 'Tahun': year, 'Jenis_Data': 'Forecast (Drift)'}
                             
-                            # Hitung forecast untuk setiap fitur (UHH, HLS, dll)
-                            for col in feature_names:
+                            # Loop hanya kolom fitur (UHH, HLS, dll)
+                            for col in forecast_cols:
+                                # Hitung drift
                                 val = forecast_drift(df_region_indexed[col], year)
                                 new_row[col] = val
                             
-                            # Ubah dictionary ke DataFrame 1 baris
-                            df_future_row = pd.DataFrame([new_row])
-                            all_data.append(df_future_row)
+                            # Tambahkan ke list sementara
+                            all_data.append(pd.DataFrame([new_row]))
                     
-                    # Update progress bar
-                    forecast_bar.progress((i + 1) / len(regions), text=f"Memproses wilayah: {region}")
+                    forecast_bar.progress((i + 1) / len(regions))
 
                 forecast_bar.empty()
 
-                # 4. Gabungkan Kembali Data
+                # 4. Gabungkan Data
                 df_final = pd.concat(all_data, ignore_index=True)
                 
-                # Jika tadi kita buat dummy cakupan, hapus lagi jika user tidak upload kolom Cakupan
                 if not has_cakupan:
                     df_final = df_final.drop(columns=['Cakupan'])
 
-                # 5. Prediksi Nilai IPM (untuk data Aktual + Forecast)
-                # Pastikan urutan kolom sesuai dengan yang diharapkan model
+                # 5. Prediksi IPM
+                # Pastikan urutan kolom sesuai feature_names asli
                 df_final["IPM_Prediksi"] = model.predict(df_final[feature_names])
 
                 # 6. Tampilkan Hasil
-                st.success(f"Berhasil memproses data & forecasting hingga tahun {target_forecast_year}!")
+                st.success(f"Prediksi & Forecast selesai (Total: {len(df_final)} baris data).")
                 
-                st.subheader("📊 Preview Hasil (Data Aktual & Forecast)")
-                st.dataframe(df_final.tail(10), use_container_width=True) # Tampilkan 10 data terakhir (forecast)
+                st.write("### 📊 Tabel Data (Aktual + Forecast 2030)")
+                st.dataframe(df_final.tail(10), use_container_width=True)
 
-                # Visualisasi Sederhana (Line Chart)
-                st.write("**Grafik Tren IPM (Aktual & Prediksi):**")
-                chart_data = df_final.set_index('Tahun')
-                if has_cakupan:
-                    st.line_chart(df_final, x='Tahun', y='IPM_Prediksi', color='Cakupan')
-                else:
-                    st.line_chart(chart_data['IPM_Prediksi'])
-
-                # 7. Download Button
+                # Download
                 csv_pred = df_final.to_csv(index=False).encode("utf-8")
                 st.download_button(
-                    label="💾 Download Hasil Lengkap (s.d. 2030)",
+                    label="💾 Download Hasil (CSV)",
                     data=csv_pred,
-                    file_name="hasil_forecast_ipm_2030.csv",
+                    file_name="hasil_forecast_ipm.csv",
                     mime="text/csv"
                 )
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+            st.error("Saran: Cek apakah nama kolom di CSV sudah sesuai (UHH, HLS, RLS, Pengeluaran, Tahun).")
 
 
 
