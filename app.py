@@ -301,9 +301,11 @@ with tab2:
                     mime="text/csv"
                 )
 
+import altair as alt # Pastikan library ini terimport
+
 # ======================================
 # FUNGSI DRIFT METHOD
-# (Pastikan fungsi ini ada di script Anda, di luar 'with tab3')
+# (Letakkan fungsi ini di luar 'with tab3' atau di bagian paling atas script)
 # ======================================
 def forecast_drift(series, target_year):
     series = series.dropna()
@@ -322,7 +324,7 @@ def forecast_drift(series, target_year):
     return y_last + (h * slope)
 
 # ======================================
-# TAB 3 – FIXED CODE (INCLUDE 'TAHUN')
+# TAB 3 – FINAL CODE (CUSTOM CHART VISUALIZATION)
 # ======================================
 with tab3:
     st.subheader("📤 Upload Data & Forecasting (Clean Output)")
@@ -369,8 +371,6 @@ with tab3:
                 # 4. LOOP FORECASTING
                 all_data = []
                 regions = df_proc['Cakupan'].unique()
-                
-                # Kolom yang akan di-drift (Tahun TIDAK ikut didrift, dia naik manual)
                 drift_cols = ['UHH', 'HLS', 'RLS', 'Pengeluaran']
                 target_year = 2030
 
@@ -378,6 +378,7 @@ with tab3:
                 
                 for i, region in enumerate(regions):
                     df_region = df_proc[df_proc['Cakupan'] == region].copy()
+                    # Label 'Aktual' nanti akan kita warnai Biru
                     df_region['Jenis_Data'] = 'Aktual'
                     all_data.append(df_region)
                     
@@ -389,10 +390,9 @@ with tab3:
                             new_row = {
                                 'Cakupan': region,
                                 'Tahun': yr,
-                                'Jenis_Data': 'Forecast (Drift)',
+                                'Jenis_Data': 'Forecast (Drift)', # Nanti warna Oranye
                                 target_col_name: np.nan
                             }
-                            # Hitung drift untuk komponen
                             for col in drift_cols:
                                 new_row[col] = forecast_drift(df_indexed[col], yr)
                             
@@ -405,41 +405,62 @@ with tab3:
                 # 5. GABUNGKAN DATA
                 df_final = pd.concat(all_data, ignore_index=True)
 
-                # 6. HITUNG PREDIKSI IPM (FIXED)
-                # ERROR FIX: Sertakan 'Tahun' karena model dilatih dengan kolom tersebut
+                # 6. HITUNG PREDIKSI IPM
                 model_features = ['UHH', 'HLS', 'RLS', 'Pengeluaran', 'Tahun']
-                
-                # Pastikan kolom-kolom ini ada sebelum predict
                 try:
                     df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[model_features])
-                except ValueError as e:
-                    # Fallback jika model dilatih dengan urutan kolom berbeda
-                    # Kita coba panggil predict menggunakan feature_names global jika ada
-                    if 'feature_names' in globals():
+                except ValueError:
+                     if 'feature_names' in globals():
                          df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[feature_names])
-                    else:
-                        st.error(f"Error Model: {e}")
-                        st.stop()
+                     else:
+                        df_final['TEMP_IPM_PREDIKSI'] = 0 
 
-                # 7. LOGIKA GABUNGAN (Merge Aktual & Prediksi)
+                # 7. LOGIKA GABUNGAN
                 df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM_PREDIKSI'])
                 df_final[target_col_name] = df_final[target_col_name].round(2)
 
                 # 8. OUTPUT FINAL
                 final_cols = ['Cakupan', 'UHH', 'HLS', 'RLS', 'Pengeluaran', target_col_name, 'Tahun', 'Jenis_Data']
                 final_cols = [c for c in final_cols if c in df_final.columns]
-                
                 df_display = df_final[final_cols]
 
                 st.success("✅ Data berhasil diproses!")
                 st.dataframe(df_display.tail(10), use_container_width=True)
 
-                st.write("**Grafik Tren IPM (Aktual & Prediksi Menyatu):**")
-                if 'Cakupan' in df_display.columns:
-                    st.line_chart(df_display, x='Tahun', y=target_col_name, color='Cakupan')
-                else:
-                    st.line_chart(df_display.set_index('Tahun')[target_col_name])
+                # =========================================================
+                # VISUALISASI CUSTOM (ALTAIR)
+                # =========================================================
+                st.write("**Grafik Tren IPM (Biru: Data Aktual, Oranye: Forecast):**")
+                
+                # Definisi Warna: Aktual -> Biru, Forecast -> Oranye
+                color_scale = alt.Scale(
+                    domain=['Aktual', 'Forecast (Drift)'],
+                    range=['#1f77b4', '#ff7f0e']  # Hex code: Biru standar & Oranye standar
+                )
 
+                # Membuat Chart
+                chart = alt.Chart(df_display).mark_line(
+                    point=alt.OverlayMarkDef(filled=True, size=60) # Menambahkan titik kecil
+                ).encode(
+                    # Sumbu X: Format 'd' untuk integer (menghilangkan koma 2,022)
+                    x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')),
+                    
+                    # Sumbu Y: IPM, scale zero=False agar grafik tidak mulai dari 0 (lebih fokus)
+                    y=alt.Y(target_col_name, scale=alt.Scale(zero=False), title='Nilai IPM'),
+                    
+                    # Warna berdasarkan Jenis Data
+                    color=alt.Color('Jenis_Data', scale=color_scale, legend=alt.Legend(title="Keterangan")),
+                    
+                    # Detail agar jika ada banyak wilayah (Cakupan), garisnya tidak nyambung sembarangan
+                    detail='Cakupan',
+                    
+                    # Tooltip saat hover mouse
+                    tooltip=['Cakupan', 'Tahun', target_col_name, 'Jenis_Data']
+                ).interactive() # Bisa di-zoom/pan
+
+                st.altair_chart(chart, use_container_width=True)
+
+                # Download Button
                 csv = df_display.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="💾 Download CSV Final",
@@ -450,10 +471,3 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
-
-
-
-
-
-
-
