@@ -290,16 +290,30 @@ with tab2:
                     range=['#1f77b4', '#ff7f0e']
                 )
 
-                chart = alt.Chart(df_plot_combined).mark_line(
-                    point=alt.OverlayMarkDef(filled=True, size=60)
-                ).encode(
-                    x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')), # Format 'd' agar 2022 (bukan 2,022)
+                # 1. Base Chart (Dasar encoding)
+                base = alt.Chart(df_plot_combined).encode(
+                    x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')),
                     y=alt.Y('Nilai IPM', scale=alt.Scale(zero=False), title='Nilai IPM'),
                     color=alt.Color('Tipe', scale=color_scale, legend=alt.Legend(title="Keterangan")),
                     tooltip=['Tahun', 'Tipe', alt.Tooltip('Nilai IPM', format='.2f')]
-                ).interactive()
+                )
 
-                st.altair_chart(chart, use_container_width=True)
+                # 2. Layer Garis
+                line = base.mark_line()
+
+                # 3. Layer Titik
+                point = base.mark_point(filled=True, size=60)
+
+                # 4. Layer Teks Label
+                # dy=-15: Geser ke atas 15 pixel dari titik
+                # color: Mengambil dari 'Tipe' agar warnanya sama dengan garis
+                text = base.mark_text(align='center', dy=-15).encode(
+                    text=alt.Text('Nilai IPM', format='.2f'),
+                    color=alt.Color('Tipe', scale=color_scale)
+                )
+
+                # Gabungkan dan Tampilkan
+                st.altair_chart((line + point + text).interactive(), use_container_width=True)
 
                 # --- 4. DOWNLOAD BUTTON ---
                 csv_future = df_future[
@@ -483,6 +497,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
