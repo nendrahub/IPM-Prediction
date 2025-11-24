@@ -247,7 +247,7 @@ with tab2:
                 new["Pengeluaran"] = new["Pengeluaran"] + growth["Pengeluaran_diff"]
 
                 X_new = new[feature_names]
-                new["IPM_Prediksi"] = model.predict(X_new)[0]
+                new["IPM (Forecast)"] = model.predict(X_new)[0]
                 future_rows.append(new)
 
                 current = new
@@ -257,13 +257,13 @@ with tab2:
 
                 st.write(f"**Forecast IPM {daerah2} untuk {horizon} tahun ke depan:**")
                 st.dataframe(
-                    df_future[["Tahun", "IPM_Prediksi", "UHH", "HLS", "RLS", "Pengeluaran"]],
+                    df_future[["Tahun", "UHH", "HLS", "RLS", "Pengeluaran, "IPM (Forecast)"]],
                     use_container_width=True
                 )
 
                 # Gabungkan historis + forecast untuk plot
                 df_plot_hist = df_d[["Tahun", "IPM"]].rename(columns={"IPM": "IPM_Aktual"})
-                df_plot_future = df_future[["Tahun", "IPM_Prediksi"]]
+                df_plot_future = df_future[["Tahun", "IPM (Forecast)"]]
 
                 df_plot = pd.merge(
                     df_plot_hist,
@@ -291,7 +291,7 @@ with tab2:
 
                 # 🔽 Tombol download hasil forecast
                 csv_future = df_future[
-                    ["Tahun", "IPM_Prediksi", "UHH", "HLS", "RLS", "Pengeluaran"]
+                    ["Tahun", "IPM (Forecast)", "UHH", "HLS", "RLS", "Pengeluaran"]
                 ].to_csv(index=False).encode("utf-8")
 
                 st.download_button(
@@ -408,15 +408,15 @@ with tab3:
                 # 6. HITUNG PREDIKSI IPM
                 model_features = ['UHH', 'HLS', 'RLS', 'Pengeluaran', 'Tahun']
                 try:
-                    df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[model_features])
+                    df_final['TEMP_IPM (Forecast)'] = model.predict(df_final[model_features])
                 except ValueError:
                      if 'feature_names' in globals():
-                         df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[feature_names])
+                         df_final['TEMP_IPM (Forecast)'] = model.predict(df_final[feature_names])
                      else:
-                        df_final['TEMP_IPM_PREDIKSI'] = 0 
+                        df_final['TEMP_IPM (Forecast)'] = 0 
 
                 # 7. LOGIKA GABUNGAN
-                df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM_PREDIKSI'])
+                df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM (Forecast)'])
                 df_final[target_col_name] = df_final[target_col_name].round(2)
 
                 # 8. OUTPUT FINAL
@@ -471,6 +471,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
