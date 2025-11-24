@@ -257,7 +257,7 @@ with tab2:
 
                 st.write(f"**Forecast IPM {daerah2} untuk {horizon} tahun ke depan:**")
                 st.dataframe(
-                    df_future[["Tahun", "UHH", "HLS", "RLS", "Pengeluaran, "IPM (Forecast)"]],
+                    df_future[["Tahun", "UHH", "HLS", "RLS", "Pengeluaran", "IPM (Forecast)"]],
                     use_container_width=True
                 )
 
@@ -471,6 +471,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
