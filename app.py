@@ -303,7 +303,7 @@ with tab2:
 
 # ======================================
 # FUNGSI DRIFT METHOD
-# (Pastikan fungsi ini ada di script Anda)
+# (Pastikan fungsi ini ada di script Anda, di luar 'with tab3')
 # ======================================
 def forecast_drift(series, target_year):
     series = series.dropna()
@@ -322,7 +322,7 @@ def forecast_drift(series, target_year):
     return y_last + (h * slope)
 
 # ======================================
-# TAB 3 – PERBAIKAN STRUKTUR FINAL
+# TAB 3 – FIXED CODE (INCLUDE 'TAHUN')
 # ======================================
 with tab3:
     st.subheader("📤 Upload Data & Forecasting (Clean Output)")
@@ -336,10 +336,9 @@ with tab3:
             # 1. BACA FILE
             df_input = pd.read_csv(uploaded_file, decimal=",", thousands=".")
             
-            # 2. BERSIHKAN NAMA KOLOM (Hapus spasi, samakan format)
+            # 2. BERSIHKAN NAMA KOLOM
             df_input.columns = df_input.columns.str.strip()
             
-            # Mapping agar nama kolom standar (sesuai target output Anda)
             rename_map = {
                 'tahun': 'Tahun', 'TAHUN': 'Tahun',
                 'uhh': 'UHH', 'Uhh': 'UHH',
@@ -347,13 +346,11 @@ with tab3:
                 'rls': 'RLS', 'Rls': 'RLS',
                 'pengeluaran': 'Pengeluaran', 'PENGELUARAN': 'Pengeluaran',
                 'cakupan': 'Cakupan', 'CAKUPAN': 'Cakupan',
-                # Pastikan kolom target bernama panjang seperti yang Anda mau
                 'IPM': 'Indeks Pembangunan Manusia (Indeks)',
                 'Indeks Pembangunan Manusia': 'Indeks Pembangunan Manusia (Indeks)'
             }
             df_input = df_input.rename(columns=rename_map)
 
-            # Validasi kolom wajib
             wajib = ['UHH', 'HLS', 'RLS', 'Pengeluaran', 'Tahun']
             if not all(col in df_input.columns for col in wajib):
                 st.error(f"Kolom wajib tidak lengkap. Pastikan ada: {wajib}")
@@ -363,48 +360,40 @@ with tab3:
                 if 'Cakupan' not in df_proc.columns:
                     df_proc['Cakupan'] = 'Wilayah Upload'
                 
-                # Nama kolom target final
                 target_col_name = 'Indeks Pembangunan Manusia (Indeks)'
-                
-                # Jika user tidak upload kolom IPM, kita buat kosong dulu
                 if target_col_name not in df_proc.columns:
                     df_proc[target_col_name] = np.nan
 
-                # Sorting data
                 df_proc = df_proc.sort_values(by=['Cakupan', 'Tahun'])
 
-                # 4. LOOP FORECASTING (Drift Method)
+                # 4. LOOP FORECASTING
                 all_data = []
                 regions = df_proc['Cakupan'].unique()
-                feature_cols = ['UHH', 'HLS', 'RLS', 'Pengeluaran']
+                
+                # Kolom yang akan di-drift (Tahun TIDAK ikut didrift, dia naik manual)
+                drift_cols = ['UHH', 'HLS', 'RLS', 'Pengeluaran']
                 target_year = 2030
 
                 bar = st.progress(0, "Menghitung forecast...")
                 
                 for i, region in enumerate(regions):
-                    # Ambil data per wilayah
                     df_region = df_proc[df_proc['Cakupan'] == region].copy()
-                    df_region['Jenis_Data'] = 'Aktual' # Tandai data asli
-                    
-                    # Masukkan data asli ke list
+                    df_region['Jenis_Data'] = 'Aktual'
                     all_data.append(df_region)
                     
-                    # Cek tahun terakhir
                     last_year = int(df_region['Tahun'].max())
                     df_indexed = df_region.set_index('Tahun')
 
-                    # Loop tahun depan s.d 2030
                     if last_year < target_year:
                         for yr in range(last_year + 1, target_year + 1):
                             new_row = {
                                 'Cakupan': region,
                                 'Tahun': yr,
                                 'Jenis_Data': 'Forecast (Drift)',
-                                target_col_name: np.nan # Kosongkan dulu IPM-nya
+                                target_col_name: np.nan
                             }
-                            
-                            # Isi komponen (UHH, HLS, dll) pakai Drift
-                            for col in feature_cols:
+                            # Hitung drift untuk komponen
+                            for col in drift_cols:
                                 new_row[col] = forecast_drift(df_indexed[col], yr)
                             
                             all_data.append(pd.DataFrame([new_row]))
@@ -413,54 +402,55 @@ with tab3:
                 
                 bar.empty()
 
-                # 5. GABUNGKAN SEMUA DATA
+                # 5. GABUNGKAN DATA
                 df_final = pd.concat(all_data, ignore_index=True)
 
-                # 6. HITUNG PREDIKSI IPM (Untuk SEMUA baris)
-                # Kita simpan di kolom sementara dulu
-                df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[feature_cols])
-
-                # =========================================================
-                # 7. LOGIKA KUNCI: GABUNGKAN DATA AKTUAL & PREDIKSI
-                # =========================================================
-                # Cara baca: Isi kolom "Indeks..." dengan nilai aslinya.
-                # Jika nilainya NaN (kosong/masa depan), ambil dari "TEMP_IPM_PREDIKSI".
-                df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM_PREDIKSI'])
+                # 6. HITUNG PREDIKSI IPM (FIXED)
+                # ERROR FIX: Sertakan 'Tahun' karena model dilatih dengan kolom tersebut
+                model_features = ['UHH', 'HLS', 'RLS', 'Pengeluaran', 'Tahun']
                 
-                # Bulatkan biar rapi (2 desimal)
+                # Pastikan kolom-kolom ini ada sebelum predict
+                try:
+                    df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[model_features])
+                except ValueError as e:
+                    # Fallback jika model dilatih dengan urutan kolom berbeda
+                    # Kita coba panggil predict menggunakan feature_names global jika ada
+                    if 'feature_names' in globals():
+                         df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[feature_names])
+                    else:
+                        st.error(f"Error Model: {e}")
+                        st.stop()
+
+                # 7. LOGIKA GABUNGAN (Merge Aktual & Prediksi)
+                df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM_PREDIKSI'])
                 df_final[target_col_name] = df_final[target_col_name].round(2)
 
-                # 8. BERSIHKAN KOLOM (Hapus kolom sementara)
-                # Kita hanya sisakan kolom yang ada di file "Hasil Yang Saya Mau"
+                # 8. OUTPUT FINAL
                 final_cols = ['Cakupan', 'UHH', 'HLS', 'RLS', 'Pengeluaran', target_col_name, 'Tahun', 'Jenis_Data']
-                
-                # Filter hanya kolom yang benar-benar ada (jaga-jaga)
                 final_cols = [c for c in final_cols if c in df_final.columns]
+                
                 df_display = df_final[final_cols]
 
-                # 9. OUTPUT HASIL
-                st.success("✅ Data berhasil diproses sesuai format yang diinginkan.")
+                st.success("✅ Data berhasil diproses!")
                 st.dataframe(df_display.tail(10), use_container_width=True)
 
-                # Visualisasi (Pakai kolom yang sudah digabung)
                 st.write("**Grafik Tren IPM (Aktual & Prediksi Menyatu):**")
                 if 'Cakupan' in df_display.columns:
                     st.line_chart(df_display, x='Tahun', y=target_col_name, color='Cakupan')
                 else:
                     st.line_chart(df_display.set_index('Tahun')[target_col_name])
 
-                # Download
                 csv = df_display.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="💾 Download CSV (Format Final)",
+                    label="💾 Download CSV Final",
                     data=csv,
                     file_name="Hasil_Forecast_Final.csv",
                     mime="text/csv"
                 )
 
         except Exception as e:
-            st.error(f"Masih ada error: {e}")
-            st.warning("Cek nama kolom di file CSV Anda, pastikan tidak ada typo.")
+            st.error(f"Terjadi error: {e}")
+
 
 
 
