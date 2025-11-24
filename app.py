@@ -96,7 +96,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 # ======================================
-# TAB 1 – VISUALISASI IPM LEBIH BERMAKNA
+# TAB 1 – VISUALISASI IPM LEBIH BERMAKNA (UPDATED STYLE)
 # ======================================
 with tab1:
     st.subheader("📊 Ringkasan IPM Nasional & Per Daerah")
@@ -116,15 +116,20 @@ with tab1:
                 .rename(columns={"mean": "IPM_Rata2", "min": "IPM_Min", "max": "IPM_Maks"})
             )
 
-            # UPDATED VISUALIZATION: Altair dengan Line, Point, dan Label
-            chart_nat = alt.Chart(df_nat).encode(
-                x=alt.X('Tahun:O', axis=alt.Axis(labelAngle=0)),
+            # --- VISUALISASI NASIONAL (UPDATED) ---
+            # 1. Base
+            base_nat = alt.Chart(df_nat).encode(
+                x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')), # Format 'd' agar bersih
                 y=alt.Y('IPM_Rata2:Q', scale=alt.Scale(zero=False), title='IPM Rata-rata'),
                 tooltip=['Tahun', alt.Tooltip('IPM_Rata2', format='.2f')]
             )
-            line_nat = chart_nat.mark_line()
-            point_nat = chart_nat.mark_point(filled=True, size=60)
-            text_nat = chart_nat.mark_text(align='left', dx=5, dy=-10).encode(
+
+            # 2. Layer
+            line_nat = base_nat.mark_line()
+            point_nat = base_nat.mark_point(filled=True, size=60)
+            
+            # Label di atas titik
+            text_nat = base_nat.mark_text(align='center', dy=-15).encode(
                 text=alt.Text('IPM_Rata2:Q', format='.2f')
             )
             
@@ -159,12 +164,13 @@ with tab1:
             df_rank = df_year.sort_values("IPM", ascending=False)
 
             st.markdown("**Top 5 daerah dengan IPM tertinggi:**")
-            st.dataframe(df_rank.head(5)[["Cakupan", "IPM"]])
+            st.dataframe(df_rank.head(5)[["Cakupan", "IPM"]], use_container_width=True)
 
             st.markdown("**Top 5 daerah dengan IPM terendah:**")
-            st.dataframe(df_rank.tail(5)[["Cakupan", "IPM"]])
+            st.dataframe(df_rank.tail(5)[["Cakupan", "IPM"]], use_container_width=True)
 
         st.markdown("---")
+        
         # --------- BAGIAN 3: Perbandingan beberapa daerah ---------
         st.markdown("### Perbandingan Tren IPM Beberapa Daerah")
 
@@ -183,17 +189,26 @@ with tab1:
                 .sort_values(["Cakupan", "Tahun"])
             )
 
-            # UPDATED VISUALIZATION: Altair dengan Line, Point, dan Label
-            chart_sel = alt.Chart(df_sel).encode(
-                x=alt.X('Tahun:O', axis=alt.Axis(labelAngle=0)),
-                y=alt.Y('IPM:Q', scale=alt.Scale(zero=False)),
-                color='Cakupan:N',
+            # --- VISUALISASI MULTI REGION (UPDATED) ---
+            
+            # 1. Base Chart
+            base_sel = alt.Chart(df_sel).encode(
+                x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')),
+                y=alt.Y('IPM:Q', scale=alt.Scale(zero=False), title='Indeks Pembangunan Manusia'),
+                color=alt.Color('Cakupan:N', legend=alt.Legend(title="Daerah")),
                 tooltip=['Tahun', 'Cakupan', alt.Tooltip('IPM', format='.2f')]
             )
-            line_sel = chart_sel.mark_line()
-            point_sel = chart_sel.mark_point(filled=True, size=60)
-            text_sel = chart_sel.mark_text(align='left', dx=5, dy=-10).encode(
-                text=alt.Text('IPM:Q', format='.2f')
+
+            # 2. Layer Line & Point
+            line_sel = base_sel.mark_line()
+            point_sel = base_sel.mark_point(filled=True, size=60)
+
+            # 3. Layer Text
+            # dy=-15: Geser ke atas
+            # color='Cakupan:N': Warna teks mengikuti warna garis daerah
+            text_sel = base_sel.mark_text(align='center', dy=-15).encode(
+                text=alt.Text('IPM:Q', format='.2f'),
+                color=alt.Color('Cakupan:N') 
             )
 
             st.altair_chart((line_sel + point_sel + text_sel).interactive(), use_container_width=True)
@@ -497,6 +512,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
