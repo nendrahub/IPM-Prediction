@@ -350,7 +350,7 @@ def forecast_drift(series, target_year):
     return y_last + (h * slope)
 
 # ======================================
-# TAB 3 – FINAL CODE (CUSTOM CHART VISUALIZATION)
+# TAB 3 – FINAL CODE (FIXED VISUALIZATION & SYNTAX)
 # ======================================
 with tab3:
     st.subheader("📤 Upload Data & Forecasting (Clean Output)")
@@ -404,8 +404,8 @@ with tab3:
                 
                 for i, region in enumerate(regions):
                     df_region = df_proc[df_proc['Cakupan'] == region].copy()
-                    # Label 'Aktual' nanti akan kita warnai Biru
-                    df_region['Tipe'] = 'Aktual'
+                    # Label 'Aktual' (Biru)
+                    df_region['Jenis_Data'] = 'Aktual'
                     all_data.append(df_region)
                     
                     last_year = int(df_region['Tahun'].max())
@@ -416,7 +416,7 @@ with tab3:
                             new_row = {
                                 'Cakupan': region,
                                 'Tahun': yr,
-                                'Tipe': 'Forecast', # Nanti warna Oranye
+                                'Jenis_Data': 'Forecast (Drift)', # Label Forecast (Oranye)
                                 target_col_name: np.nan
                             }
                             for col in drift_cols:
@@ -434,45 +434,57 @@ with tab3:
                 # 6. HITUNG PREDIKSI IPM
                 model_features = ['UHH', 'HLS', 'RLS', 'Pengeluaran', 'Tahun']
                 try:
-                    df_final['TEMP_IPM (Forecast)'] = model.predict(df_final[model_features])
+                    df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[model_features])
                 except ValueError:
                      if 'feature_names' in globals():
-                         df_final['TEMP_IPM (Forecast)'] = model.predict(df_final[feature_names])
+                         df_final['TEMP_IPM_PREDIKSI'] = model.predict(df_final[feature_names])
                      else:
-                        df_final['TEMP_IPM (Forecast)'] = 0 
+                        df_final['TEMP_IPM_PREDIKSI'] = 0 
 
                 # 7. LOGIKA GABUNGAN
-                df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM (Forecast)'])
+                df_final[target_col_name] = df_final[target_col_name].fillna(df_final['TEMP_IPM_PREDIKSI'])
                 df_final[target_col_name] = df_final[target_col_name].round(2)
 
                 # 8. OUTPUT FINAL
-                final_cols = ['Cakupan', 'UHH', 'HLS', 'RLS', 'Pengeluaran', target_col_name, 'Tahun', 'Tipe']
+                final_cols = ['Cakupan', 'UHH', 'HLS', 'RLS', 'Pengeluaran', target_col_name, 'Tahun', 'Jenis_Data']
                 final_cols = [c for c in final_cols if c in df_final.columns]
                 df_display = df_final[final_cols]
 
                 st.success("✅ Data berhasil diproses!")
                 st.dataframe(df_display.tail(10), use_container_width=True)
 
-                ## =========================================================
-                # VISUALISASI CUSTOM (ALTAIR) - Updated Style
+                # =========================================================
+                # VISUALISASI CUSTOM (ALTAIR) - STYLE TERBARU
                 # =========================================================
                 st.write("**Grafik Tren IPM (Biru: Data Aktual, Oranye: Forecast):**")
                 
-                # Definisi Warna: 
-                # Domain harus sesuai dengan isi kolom 'Jenis_Data' di Tab 3 ('Aktual' & 'Forecast (Drift)')
+                # Definisi Warna (Sesuai isi kolom Jenis_Data)
                 color_scale = alt.Scale(
                     domain=['Aktual', 'Forecast (Drift)'],
                     range=['#1f77b4', '#ff7f0e']  # Biru & Oranye
                 )
 
-                # 1. Base Chart (Dasar encoding)
+                # 1. Base Chart
                 base = alt.Chart(df_display).encode(
                     x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')),
                     y=alt.Y(target_col_name, scale=alt.Scale(zero=False), title='Nilai IPM'),
                     color=alt.Color('Jenis_Data', scale=color_scale, legend=alt.Legend(title="Keterangan")),
-                    # Tambahkan detail 'Cakupan' agar garis antar wilayah terpisah (jika upload banyak wilayah)
-                    detail='Cakupan',
+                    detail='Cakupan', # Agar garis antar wilayah terpisah
                     tooltip=['Cakupan', 'Tahun', 'Jenis_Data', alt.Tooltip(target_col_name, format='.2f')]
+                )
+
+                # 2. Garis & Titik
+                line = base.mark_line()
+                point = base.mark_point(filled=True, size=60)
+
+                # 3. Label Teks (Warna mengikuti garis, posisi di atas titik)
+                text = base.mark_text(align='center', dy=-15).encode(
+                    text=alt.Text(target_col_name, format='.2f'),
+                    color=alt.Color('Jenis_Data', scale=color_scale)
+                )
+
+                # Tampilkan
+                st.altair_chart((line + point + text).interactive(), use_container_width=True)
 
                 # Download Button
                 csv = df_display.to_csv(index=False).encode('utf-8')
@@ -485,15 +497,6 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
-
-
-
-
-
-
-
-
-
 
 
 
