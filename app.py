@@ -262,7 +262,7 @@ with tab2:
                 )
 
                 # Gabungkan historis + forecast untuk plot
-                df_plot_hist = df_d[["Tahun", "IPM"]].rename(columns={"IPM": "IPM_Aktual"})
+                df_plot_hist = df_d[["Tahun", "IPM"]].rename(columns={"IPM": "IPM (Aktual)"})
                 df_plot_future = df_future[["Tahun", "IPM (Forecast)"]]
 
                 df_plot = pd.merge(
@@ -471,6 +471,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
