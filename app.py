@@ -379,7 +379,7 @@ with tab3:
                 for i, region in enumerate(regions):
                     df_region = df_proc[df_proc['Cakupan'] == region].copy()
                     # Label 'Aktual' nanti akan kita warnai Biru
-                    df_region['Jenis_Data'] = 'Aktual'
+                    df_region['Tipe'] = 'Aktual'
                     all_data.append(df_region)
                     
                     last_year = int(df_region['Tahun'].max())
@@ -390,7 +390,7 @@ with tab3:
                             new_row = {
                                 'Cakupan': region,
                                 'Tahun': yr,
-                                'Jenis_Data': 'Forecast (Drift)', # Nanti warna Oranye
+                                'Tipe': 'Forecast (Drift)', # Nanti warna Oranye
                                 target_col_name: np.nan
                             }
                             for col in drift_cols:
@@ -420,7 +420,7 @@ with tab3:
                 df_final[target_col_name] = df_final[target_col_name].round(2)
 
                 # 8. OUTPUT FINAL
-                final_cols = ['Cakupan', 'UHH', 'HLS', 'RLS', 'Pengeluaran', target_col_name, 'Tahun', 'Jenis_Data']
+                final_cols = ['Cakupan', 'UHH', 'HLS', 'RLS', 'Pengeluaran', target_col_name, 'Tahun', 'Tipe']
                 final_cols = [c for c in final_cols if c in df_final.columns]
                 df_display = df_final[final_cols]
 
@@ -449,13 +449,13 @@ with tab3:
                     y=alt.Y(target_col_name, scale=alt.Scale(zero=False), title='Nilai IPM'),
                     
                     # Warna berdasarkan Jenis Data
-                    color=alt.Color('Jenis_Data', scale=color_scale, legend=alt.Legend(title="Keterangan")),
+                    color=alt.Color('Tipe', scale=color_scale, legend=alt.Legend(title="Keterangan")),
                     
                     # Detail agar jika ada banyak wilayah (Cakupan), garisnya tidak nyambung sembarangan
                     detail='Cakupan',
                     
                     # Tooltip saat hover mouse
-                    tooltip=['Cakupan', 'Tahun', target_col_name, 'Jenis_Data']
+                    tooltip=['Cakupan', 'Tahun', target_col_name, 'Tipe']
                 ).interactive() # Bisa di-zoom/pan
 
                 st.altair_chart(chart, use_container_width=True)
@@ -471,3 +471,4 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
