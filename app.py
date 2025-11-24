@@ -453,38 +453,26 @@ with tab3:
                 st.success("✅ Data berhasil diproses!")
                 st.dataframe(df_display.tail(10), use_container_width=True)
 
-                # =========================================================
-                # VISUALISASI CUSTOM (ALTAIR)
+                ## =========================================================
+                # VISUALISASI CUSTOM (ALTAIR) - Updated Style
                 # =========================================================
                 st.write("**Grafik Tren IPM (Biru: Data Aktual, Oranye: Forecast):**")
                 
-                # Definisi Warna: Aktual -> Biru, Forecast -> Oranye
+                # Definisi Warna: 
+                # Domain harus sesuai dengan isi kolom 'Jenis_Data' di Tab 3 ('Aktual' & 'Forecast (Drift)')
                 color_scale = alt.Scale(
-                    domain=['Aktual', 'Forecast'],
-                    range=['#1f77b4', '#ff7f0e']  # Hex code: Biru standar & Oranye standar
+                    domain=['Aktual', 'Forecast (Drift)'],
+                    range=['#1f77b4', '#ff7f0e']  # Biru & Oranye
                 )
 
-                # Membuat Chart
-                chart = alt.Chart(df_display).mark_line(
-                    point=alt.OverlayMarkDef(filled=True, size=60) # Menambahkan titik kecil
-                ).encode(
-                    # Sumbu X: Format 'd' untuk integer (menghilangkan koma 2,022)
+                # 1. Base Chart (Dasar encoding)
+                base = alt.Chart(df_display).encode(
                     x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')),
-                    
-                    # Sumbu Y: IPM, scale zero=False agar grafik tidak mulai dari 0 (lebih fokus)
                     y=alt.Y(target_col_name, scale=alt.Scale(zero=False), title='Nilai IPM'),
-                    
-                    # Warna berdasarkan Jenis Data
-                    color=alt.Color('Tipe', scale=color_scale, legend=alt.Legend(title="Keterangan")),
-                    
-                    # Detail agar jika ada banyak wilayah (Cakupan), garisnya tidak nyambung sembarangan
+                    color=alt.Color('Jenis_Data', scale=color_scale, legend=alt.Legend(title="Keterangan")),
+                    # Tambahkan detail 'Cakupan' agar garis antar wilayah terpisah (jika upload banyak wilayah)
                     detail='Cakupan',
-                    
-                    # Tooltip saat hover mouse
-                    tooltip=['Cakupan', 'Tahun', target_col_name, 'Tipe']
-                ).interactive() # Bisa di-zoom/pan
-
-                st.altair_chart(chart, use_container_width=True)
+                    tooltip=['Cakupan', 'Tahun', 'Jenis_Data', alt.Tooltip(target_col_name, format='.2f')]
 
                 # Download Button
                 csv = df_display.to_csv(index=False).encode('utf-8')
@@ -497,6 +485,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
