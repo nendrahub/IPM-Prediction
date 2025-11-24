@@ -202,10 +202,10 @@ with tab1:
             st.info("Pilih minimal satu daerah untuk melihat perbandingan tren IPM.")
 
 # ======================================
-# TAB 2 – FORECAST BERDASARKAN GROWTH
+# TAB 2 – FORECAST BERDASARKAN GROWTH (DRIFT)
 # ======================================
 with tab2:
-    st.subheader("🔮 Forecast IPM per Daerah")
+    st.subheader("🔮 Forecast IPM per Daerah (Metode Drift)")
 
     if df_hist is None:
         st.warning("File data_ipm.csv tidak ditemukan. Forecast tidak dapat dihitung.")
@@ -217,12 +217,14 @@ with tab2:
             key="forecast_daerah"
         )
 
+        # Ambil data per daerah & urutkan tahun
         df_d = df_hist[df_hist["Cakupan"] == daerah2].sort_values("Tahun").copy()
 
         if df_d["Tahun"].nunique() < 2:
-            st.warning("Data tahun untuk daerah ini terlalu sedikit untuk menghitung growth rata-rata.")
+            st.warning("Data tahun terlalu sedikit.")
         else:
-            # Hitung growth sederhana
+            # --- 1. HITUNG GROWTH (DRIFT) ---
+            # Secara matematis: Rata-rata selisih tahunan = Slope Drift Method
             df_d["UHH_diff"] = df_d["UHH"].diff()
             df_d["HLS_diff"] = df_d["HLS"].diff()
             df_d["RLS_diff"] = df_d["RLS"].diff()
@@ -235,61 +237,71 @@ with tab2:
 
             horizon = st.slider("Horizon tahun forecast", 1, 10, 5)
 
+            # --- 2. GENERATE FORECAST ---
             future_rows = []
             current = last_row.copy()
 
             for i in range(1, horizon + 1):
                 new = current.copy()
                 new["Tahun"] = last_year + i
+                
+                # Rumus Drift: Nilai Baru = Nilai Lama + Rata2 Growth
                 new["UHH"] = new["UHH"] + growth["UHH_diff"]
                 new["HLS"] = new["HLS"] + growth["HLS_diff"]
                 new["RLS"] = new["RLS"] + growth["RLS_diff"]
                 new["Pengeluaran"] = new["Pengeluaran"] + growth["Pengeluaran_diff"]
 
+                # Prediksi IPM pakai Model ML
                 X_new = new[feature_names]
                 new["IPM (Forecast)"] = model.predict(X_new)[0]
+                
                 future_rows.append(new)
-
                 current = new
 
             if future_rows:
                 df_future = pd.concat(future_rows, ignore_index=True)
 
                 st.write(f"**Forecast IPM {daerah2} untuk {horizon} tahun ke depan:**")
+                
+                # Tampilkan Tabel
                 st.dataframe(
                     df_future[["Tahun", "UHH", "HLS", "RLS", "Pengeluaran", "IPM (Forecast)"]],
                     use_container_width=True
                 )
 
-                # Gabungkan historis + forecast untuk plot
-                df_plot_hist = df_d[["Tahun", "IPM"]].rename(columns={"IPM": "IPM (Aktual)"})
-                df_plot_future = df_future[["Tahun", "IPM (Forecast)"]]
+                # --- 3. VISUALISASI CHART (Updated Style) ---
+                
+                # Siapkan Data Aktual (IPM)
+                df_plot_hist = df_d[["Tahun", "IPM"]].copy()
+                df_plot_hist["Jenis_Data"] = "Aktual"
+                df_plot_hist = df_plot_hist.rename(columns={"IPM": "Nilai IPM"})
 
-                df_plot = pd.merge(
-                    df_plot_hist,
-                    df_plot_future,
-                    on="Tahun",
-                    how="outer"
-                ).sort_values("Tahun")
+                # Siapkan Data Forecast (IPM Forecast)
+                df_plot_future = df_future[["Tahun", "IPM (Forecast)"]].copy()
+                df_plot_future["Jenis_Data"] = "Forecast (Drift)"
+                df_plot_future = df_plot_future.rename(columns={"IPM (Forecast)": "Nilai IPM"})
 
-                # UPDATED VISUALIZATION: Melt data untuk Altair agar bisa memberi warna berbeda dan label
-                df_plot_melt = df_plot.melt("Tahun", var_name="Jenis", value_name="Nilai IPM").dropna()
+                # Gabung jadi satu DataFrame panjang (Long Format)
+                df_plot_combined = pd.concat([df_plot_hist, df_plot_future], ignore_index=True)
 
-                chart_fore = alt.Chart(df_plot_melt).encode(
-                    x=alt.X('Tahun:O', axis=alt.Axis(labelAngle=0)),
-                    y=alt.Y('Nilai IPM:Q', scale=alt.Scale(zero=False)),
-                    color='Jenis:N',
-                    tooltip=['Tahun', 'Jenis', alt.Tooltip('Nilai IPM', format='.2f')]
-                )
-                line_fore = chart_fore.mark_line()
-                point_fore = chart_fore.mark_point(filled=True, size=60)
-                text_fore = chart_fore.mark_text(align='left', dx=5, dy=-10).encode(
-                    text=alt.Text('Nilai IPM:Q', format='.2f')
+                # Definisi Warna: Biru (Aktual), Oranye (Forecast)
+                color_scale = alt.Scale(
+                    domain=['Aktual', 'Forecast (Drift)'],
+                    range=['#1f77b4', '#ff7f0e']
                 )
 
-                st.altair_chart((line_fore + point_fore + text_fore).interactive(), use_container_width=True)
+                chart = alt.Chart(df_plot_combined).mark_line(
+                    point=alt.OverlayMarkDef(filled=True, size=60)
+                ).encode(
+                    x=alt.X('Tahun', axis=alt.Axis(format='d', title='Tahun')), # Format 'd' agar 2022 (bukan 2,022)
+                    y=alt.Y('Nilai IPM', scale=alt.Scale(zero=False), title='Nilai IPM'),
+                    color=alt.Color('Jenis_Data', scale=color_scale, legend=alt.Legend(title="Keterangan")),
+                    tooltip=['Tahun', 'Jenis_Data', alt.Tooltip('Nilai IPM', format='.2f')]
+                ).interactive()
 
-                # 🔽 Tombol download hasil forecast
+                st.altair_chart(chart, use_container_width=True)
+
+                # --- 4. DOWNLOAD BUTTON ---
                 csv_future = df_future[
                     ["Tahun", "IPM (Forecast)", "UHH", "HLS", "RLS", "Pengeluaran"]
                 ].to_csv(index=False).encode("utf-8")
@@ -471,6 +483,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
