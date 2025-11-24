@@ -302,27 +302,27 @@ with tab2:
                 )
 
 # ======================================
-# FUNGSI DRIFT METHOD
+# FUNGSI DRIFT METHOD (Letakkan di luar atau sebelum 'with tab3')
 # ======================================
 def forecast_drift(series, target_year):
     """
     Memprediksi nilai masa depan menggunakan Drift Method.
-    series: pandas Series (data historis urut tahun)
-    target_year: int (tahun tujuan prediksi)
+    Rumus: y(T+h) = y(T) + h * ((y(T) - y(1)) / (T-1))
     """
-    # Pastikan data tidak kosong dan minimal ada 2 titik data untuk menghitung slope
-    if len(series) < 2:
-        return series.iloc[-1] # Jika data cuma 1, gunakan nilai terakhir (Naïve)
+    # Hapus missing values untuk perhitungan tren yang akurat
+    series = series.dropna()
     
-    y_last = series.iloc[-1] # Nilai tahun terakhir
-    y_first = series.iloc[0] # Nilai tahun pertama
-    T = len(series)          # Jumlah data historis
+    if len(series) < 2:
+        return series.iloc[-1] if len(series) > 0 else 0
+    
+    y_last = series.iloc[-1]
+    y_first = series.iloc[0]
+    T = len(series)
     
     # Hitung rata-rata perubahan (slope)
     slope = (y_last - y_first) / (T - 1)
     
-    # Hitung h (berapa tahun ke depan)
-    # Kita asumsikan index series adalah Tahun
+    # Hitung h (jarak tahun prediksi dari tahun terakhir data)
     last_year_idx = series.index[-1]
     h = target_year - last_year_idx
     
@@ -338,16 +338,17 @@ with tab3:
     st.subheader("📤 Upload Data, Prediksi & Forecasting IPM (s.d. 2030)")
 
     st.write(
-        "Fitur ini untuk **upload file CSV** komponen IPM. Sistem akan memprediksi IPM data saat ini "
-        "dan melakukan **Forecasting (Drift Method)** untuk komponen UHH, HLS, RLS, & Pengeluaran hingga tahun 2030."
+        "Fitur ini menggabungkan **Data Aktual** (jika ada) dengan **Prediksi Masa Depan**. "
+        "Sistem akan melakukan forecasting komponen (Drift Method) hingga tahun 2030."
     )
 
-    st.markdown(
+    st.info(
         """
-        **Format kolom yang diharapkan:**
-        - `UHH`, `HLS`, `RLS`, `Pengeluaran`  
-        - `Tahun`  
-        - `Cakupan` (Opsional: Nama Provinsi/Kabupaten. Jika tidak ada, dianggap 1 wilayah).
+        **Format kolom CSV yang didukung:**
+        - `UHH`, `HLS`, `RLS`, `Pengeluaran` (Wajib)
+        - `Tahun` (Wajib)
+        - `Cakupan` (Opsional: Nama Wilayah)
+        - `Indeks Pembangunan Manusia (Indeks)` (Opsional: Data Aktual untuk referensi)
         """
     )
 
@@ -359,148 +360,44 @@ with tab3:
 
     if uploaded_file is not None:
         try:
-            # 1. Load Data
-            df_input = pd.read_csv(
-                uploaded_file,
-                decimal=",",      
-                thousands="."     
-            )
+            # 1. LOAD DATA
+            df_input = pd.read_csv(uploaded_file, decimal=",", thousands=".")
             
-            # --- PERBAIKAN 1: Normalisasi Nama Kolom ---
-            # Menghilangkan spasi di awal/akhir nama kolom & mengubah jadi Title Case
-            # Contoh: "tahun " -> "Tahun", "hls" -> "Hls" (Kita handle manual mapping biar aman)
+            # --- NORMALISASI NAMA KOLOM ---
+            # Mengatasi masalah huruf besar/kecil atau spasi
             df_input.columns = df_input.columns.str.strip()
             
-            # Mapping manual jika user menulis huruf kecil/besar berbeda
             col_mapping = {
                 'tahun': 'Tahun', 'TAHUN': 'Tahun',
                 'uhh': 'UHH', 'Uhh': 'UHH',
                 'hls': 'HLS', 'Hls': 'HLS',
                 'rls': 'RLS', 'Rls': 'RLS',
                 'pengeluaran': 'Pengeluaran', 'PENGELUARAN': 'Pengeluaran',
-                'cakupan': 'Cakupan', 'CAKUPAN': 'Cakupan'
+                'cakupan': 'Cakupan', 'CAKUPAN': 'Cakupan',
+                # Mapping nama kolom target asli jika user upload data BPS
+                'Indeks Pembangunan Manusia': 'Indeks Pembangunan Manusia (Indeks)',
+                'IPM': 'Indeks Pembangunan Manusia (Indeks)'
             }
             df_input = df_input.rename(columns=col_mapping)
             
-            # Cek kolom wajib
+            # Cek kolom wajib (Fitur + Tahun)
             required_cols = feature_names + ['Tahun']
             missing = [col for col in required_cols if col not in df_input.columns]
             
             if missing:
-                st.error(f"Kolom berikut tidak ditemukan (Cek penulisan huruf besar/kecil): {missing}")
-                st.write("Nama kolom yang terdeteksi di file:", list(df_input.columns))
+                st.error(f"Kolom wajib tidak ditemukan: {missing}")
+                st.write("Nama kolom di file Anda:", list(df_input.columns))
             else:
-                # 2. Persiapan Data
+                # 2. PERSIAPAN DATA
                 df_proc = df_input.copy()
                 
-                # Handle Cakupan
+                # Handle kolom Cakupan (Wilayah)
                 has_cakupan = 'Cakupan' in df_proc.columns
                 if not has_cakupan:
                     df_proc['Cakupan'] = 'Wilayah Upload'
 
-                df_proc = df_proc.sort_values(by=['Cakupan', 'Tahun'])
-                all_data = []
-                target_forecast_year = 2030
-                
-                # Ambil list fitur yang HANYA numerik untuk di-forecast (Kecuali Tahun)
-                # Ini mencegah error jika 'Tahun' tidak sengaja masuk ke variable feature_names
-                forecast_cols = [col for col in feature_names if col != 'Tahun']
-
-                # 3. Loop per Wilayah
-                regions = df_proc['Cakupan'].unique()
-                forecast_bar = st.progress(0, text="Sedang menghitung forecast...")
-
-                for i, region in enumerate(regions):
-                    # Filter data wilayah
-                    df_region = df_proc[df_proc['Cakupan'] == region].copy()
-                    
-                    # --- PERBAIKAN 2: Aman dari Error Index ---
-                    # Kita gunakan df_region untuk ambil last_year, 
-                    # dan df_region_indexed HANYA untuk perhitungan drift
-                    last_year = df_region['Tahun'].max()
-                    
-                    df_region_indexed = df_region.set_index('Tahun')
-                    
-                    # Simpan data aktual
-                    df_region['Jenis_Data'] = 'Aktual'
-                    all_data.append(df_region)
-                    
-                    # Forecasting Loop
-                    if last_year < target_forecast_year:
-                        future_years = range(last_year + 1, target_forecast_year + 1)
-                        
-                        for year in future_years:
-                            new_row = {'Cakupan': region, 'Tahun': year, 'Jenis_Data': 'Forecast (Drift)'}
-                            
-                            # Loop hanya kolom fitur (UHH, HLS, dll)
-                            for col in forecast_cols:
-                                # Hitung drift
-                                val = forecast_drift(df_region_indexed[col], year)
-                                new_row[col] = val
-                            
-                            # Tambahkan ke list sementara
-                            all_data.append(pd.DataFrame([new_row]))
-                    
-                    forecast_bar.progress((i + 1) / len(regions))
-
-                forecast_bar.empty()
-
-                # 4. Gabungkan Data
-                df_final = pd.concat(all_data, ignore_index=True)
-                
-                if not has_cakupan:
-                    df_final = df_final.drop(columns=['Cakupan'])
-
-                # 5. Prediksi Nilai IPM (Hitung dulu untuk SEMUA baris sebagai cadangan)
-                df_final["IPM_Prediksi"] = model.predict(df_final[feature_names])
-
-                # --- LOGIKA PENGGABUNGAN (AKTUAL + PREDIKSI) ---
-                # Nama kolom target sesuai file asli (sesuai screenshot Anda)
-                col_target_asli = "Indeks Pembangunan Manusia (Indeks)"
-
-                # Cek apakah user mengupload kolom target IPM asli
-                if col_target_asli in df_final.columns:
-                    # Logika: Ambil kolom Asli, jika kosong (NaN) isi dengan Prediksi
-                    df_final["IPM"] = df_final[col_target_asli].fillna(df_final["IPM_Prediksi"])
-                else:
-                    # Jika user tidak upload kolom IPM asli, pakai prediksi semua
-                    df_final["IPM"] = df_final["IPM_Prediksi"]
-
-                # Opsional: Rapikan format angka (2 desimal)
-                df_final["IPM"] = df_final["IPM"].round(2)
-
-                # 6. Tampilkan Hasil
-                st.success(f"Prediksi & Forecast selesai (Total: {len(df_final)} baris data).")
-                
-                # Kita rapikan urutan kolom agar enak dibaca
-                # Menaruh kolom 'IPM' (Hasil Gabungan) di sebelah Tahun
-                cols_to_show = ['Cakupan', 'Tahun', 'IPM', 'Jenis_Data'] + feature_names
-                
-                # Filter hanya kolom yang ada (jaga-jaga jika Cakupan didrop)
-                cols_to_show = [c for c in cols_to_show if c in df_final.columns]
-
-                st.subheader("📊 Hasil Akhir (Gabungan Aktual & Forecast)")
-                st.dataframe(df_final[cols_to_show].tail(10), use_container_width=True)
-
-                # Visualisasi: Gunakan kolom 'IPM' gabungan
-                st.write("**Grafik Tren IPM (Gabungan):**")
-                if has_cakupan:
-                    st.line_chart(df_final, x='Tahun', y='IPM', color='Cakupan')
-                else:
-                    st.line_chart(df_final.set_index('Tahun')['IPM'])
-
-                # Download Button (Download dataframe yang sudah rapi)
-                csv_pred = df_final[cols_to_show].to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    label="💾 Download Hasil Gabungan (CSV)",
-                    data=csv_pred,
-                    file_name="hasil_forecast_ipm_final.csv",
-                    mime="text/csv"
-                )
-
-        except Exception as e:
-            st.error(f"Terjadi error: {e}")
-            st.error("Saran: Cek apakah nama kolom di CSV sudah sesuai (UHH, HLS, RLS, Pengeluaran, Tahun).")
+                # Urutkan data agar perhitungan drift benar
+                df_proc = df_
 
 
 
