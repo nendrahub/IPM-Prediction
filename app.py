@@ -431,7 +431,7 @@ with tab3:
                             new_row = {
                                 'Cakupan': region,
                                 'Tahun': yr,
-                                'Jenis_Data': 'Forecast (Drift)', # Label Forecast (Oranye)
+                                'Jenis_Data': 'Forecast', # Label Forecast (Oranye)
                                 target_col_name: np.nan
                             }
                             for col in drift_cols:
@@ -475,7 +475,7 @@ with tab3:
                 
                 # Definisi Warna (Sesuai isi kolom Jenis_Data)
                 color_scale = alt.Scale(
-                    domain=['Aktual', 'Forecast (Drift)'],
+                    domain=['Aktual', 'Forecast'],
                     range=['#1f77b4', '#ff7f0e']  # Biru & Oranye
                 )
 
@@ -512,6 +512,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
