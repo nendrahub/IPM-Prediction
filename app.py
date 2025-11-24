@@ -273,18 +273,18 @@ with tab2:
                 ).sort_values("Tahun")
 
                 # UPDATED VISUALIZATION: Melt data untuk Altair agar bisa memberi warna berbeda dan label
-                df_plot_melt = df_plot.melt("Tahun", var_name="Jenis", value_name="Nilai_IPM").dropna()
+                df_plot_melt = df_plot.melt("Tahun", var_name="Jenis", value_name="Nilai IPM").dropna()
 
                 chart_fore = alt.Chart(df_plot_melt).encode(
                     x=alt.X('Tahun:O', axis=alt.Axis(labelAngle=0)),
-                    y=alt.Y('Nilai_IPM:Q', scale=alt.Scale(zero=False)),
+                    y=alt.Y('Nilai IPM:Q', scale=alt.Scale(zero=False)),
                     color='Jenis:N',
-                    tooltip=['Tahun', 'Jenis', alt.Tooltip('Nilai_IPM', format='.2f')]
+                    tooltip=['Tahun', 'Jenis', alt.Tooltip('Nilai IPM', format='.2f')]
                 )
                 line_fore = chart_fore.mark_line()
                 point_fore = chart_fore.mark_point(filled=True, size=60)
                 text_fore = chart_fore.mark_text(align='left', dx=5, dy=-10).encode(
-                    text=alt.Text('Nilai_IPM:Q', format='.2f')
+                    text=alt.Text('Nilai IPM:Q', format='.2f')
                 )
 
                 st.altair_chart((line_fore + point_fore + text_fore).interactive(), use_container_width=True)
@@ -471,6 +471,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
