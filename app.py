@@ -471,7 +471,7 @@ with tab3:
                 # =========================================================
                 # VISUALISASI CUSTOM (ALTAIR) - STYLE TERBARU
                 # =========================================================
-                st.write("**Grafik Tren IPM (Biru: Data Aktual, Oranye: Forecast):**")
+                st.write("**Grafik Tren IPM**")
                 
                 # Definisi Warna (Sesuai isi kolom Jenis_Data)
                 color_scale = alt.Scale(
@@ -512,6 +512,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
