@@ -278,7 +278,7 @@ with tab2:
 
                 # Siapkan Data Forecast (IPM Forecast)
                 df_plot_future = df_future[["Tahun", "IPM (Forecast)"]].copy()
-                df_plot_future["Tipe"] = "Forecast (Drift)"
+                df_plot_future["Tipe"] = "Forecast"
                 df_plot_future = df_plot_future.rename(columns={"IPM (Forecast)": "Nilai IPM"})
 
                 # Gabung jadi satu DataFrame panjang (Long Format)
@@ -286,7 +286,7 @@ with tab2:
 
                 # Definisi Warna: Biru (Aktual), Oranye (Forecast)
                 color_scale = alt.Scale(
-                    domain=['Aktual', 'Forecast (Drift)'],
+                    domain=['Aktual', 'Forecast'],
                     range=['#1f77b4', '#ff7f0e']
                 )
 
@@ -483,6 +483,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
