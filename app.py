@@ -451,28 +451,57 @@ with tab3:
                 if not has_cakupan:
                     df_final = df_final.drop(columns=['Cakupan'])
 
-                # 5. Prediksi IPM
-                # Pastikan urutan kolom sesuai feature_names asli
+                # 5. Prediksi Nilai IPM (Hitung dulu untuk SEMUA baris sebagai cadangan)
                 df_final["IPM_Prediksi"] = model.predict(df_final[feature_names])
+
+                # --- LOGIKA PENGGABUNGAN (AKTUAL + PREDIKSI) ---
+                # Nama kolom target sesuai file asli (sesuai screenshot Anda)
+                col_target_asli = "Indeks Pembangunan Manusia (Indeks)"
+
+                # Cek apakah user mengupload kolom target IPM asli
+                if col_target_asli in df_final.columns:
+                    # Logika: Ambil kolom Asli, jika kosong (NaN) isi dengan Prediksi
+                    df_final["IPM"] = df_final[col_target_asli].fillna(df_final["IPM_Prediksi"])
+                else:
+                    # Jika user tidak upload kolom IPM asli, pakai prediksi semua
+                    df_final["IPM"] = df_final["IPM_Prediksi"]
+
+                # Opsional: Rapikan format angka (2 desimal)
+                df_final["IPM"] = df_final["IPM"].round(2)
 
                 # 6. Tampilkan Hasil
                 st.success(f"Prediksi & Forecast selesai (Total: {len(df_final)} baris data).")
                 
-                st.write("### 📊 Tabel Data (Aktual + Forecast 2030)")
-                st.dataframe(df_final.tail(10), use_container_width=True)
+                # Kita rapikan urutan kolom agar enak dibaca
+                # Menaruh kolom 'IPM' (Hasil Gabungan) di sebelah Tahun
+                cols_to_show = ['Cakupan', 'Tahun', 'IPM', 'Jenis_Data'] + feature_names
+                
+                # Filter hanya kolom yang ada (jaga-jaga jika Cakupan didrop)
+                cols_to_show = [c for c in cols_to_show if c in df_final.columns]
 
-                # Download
-                csv_pred = df_final.to_csv(index=False).encode("utf-8")
+                st.subheader("📊 Hasil Akhir (Gabungan Aktual & Forecast)")
+                st.dataframe(df_final[cols_to_show].tail(10), use_container_width=True)
+
+                # Visualisasi: Gunakan kolom 'IPM' gabungan
+                st.write("**Grafik Tren IPM (Gabungan):**")
+                if has_cakupan:
+                    st.line_chart(df_final, x='Tahun', y='IPM', color='Cakupan')
+                else:
+                    st.line_chart(df_final.set_index('Tahun')['IPM'])
+
+                # Download Button (Download dataframe yang sudah rapi)
+                csv_pred = df_final[cols_to_show].to_csv(index=False).encode("utf-8")
                 st.download_button(
-                    label="💾 Download Hasil (CSV)",
+                    label="💾 Download Hasil Gabungan (CSV)",
                     data=csv_pred,
-                    file_name="hasil_forecast_ipm.csv",
+                    file_name="hasil_forecast_ipm_final.csv",
                     mime="text/csv"
                 )
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
             st.error("Saran: Cek apakah nama kolom di CSV sudah sesuai (UHH, HLS, RLS, Pengeluaran, Tahun).")
+
 
 
 
