@@ -220,7 +220,7 @@ with tab1:
 # TAB 2 – FORECAST BERDASARKAN GROWTH (DRIFT)
 # ======================================
 with tab2:
-    st.subheader("🔮 Forecast IPM per Daerah (Metode Drift)")
+    st.subheader("🔮 Forecast IPM per Daerah")
 
     if df_hist is None:
         st.warning("File data_ipm.csv tidak ditemukan. Forecast tidak dapat dihitung.")
@@ -512,6 +512,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
