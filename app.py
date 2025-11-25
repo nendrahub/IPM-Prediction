@@ -36,7 +36,7 @@ st.set_page_config(
 st.title("📈 Prediksi & Forecasting IPM Indonesia")
 
 st.write(
-    "Aplikasi ini menggunakan model **Gradient Boosting** untuk memprediksi "
+    "Aplikasi ini menggunakan model **Gradient Boosting Regressor** untuk memprediksi "
     "Indeks Pembangunan Manusia (IPM) berdasarkan komponen penyusunnya: "
     "**UHH, HLS, RLS, Pengeluaran per Kapita, dan Tahun**."
 )
@@ -250,7 +250,7 @@ with tab2:
             last_row = df_d.tail(1).copy()
             last_year = int(last_row["Tahun"].iloc[0])
 
-            horizon = st.slider("Horizon tahun forecast", 1, 10, 5)
+            horizon = st.slider("Jumlah Tahun Forecast", 1, 10, 5)
 
             # --- 2. GENERATE FORECAST ---
             future_rows = []
@@ -512,6 +512,7 @@ with tab3:
 
         except Exception as e:
             st.error(f"Terjadi error: {e}")
+
 
 
 
